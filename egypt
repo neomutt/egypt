@@ -1,0 +1,142 @@
+#!/usr/bin/perl -w
+
+=head1 NAME
+
+egypt - create call graph from gcc RTL dump
+
+=head1 SYNOPISIS
+
+ egypt [--omit function,function,...] <rtl-files> | dot <dot-options>
+    
+=head1 DESCRIPTION
+
+Egypt is a devilishly simple tool for creating call graphs of C
+programs.  Egypt neither analyzes source code nor lays out graphs.
+Instead, it leaves the source code analysis to GCC and the graph
+layout to Graphviz, both of which better at their respective jobs than
+egypt could ever hope to be itself.  Egypt just acts as glue between
+these existing tools.
+
+=head1 OPTIONS
+
+=over 8
+
+=item omit
+
+Omit the given functions from the call graph.  Multiple function names
+may be given separated by commas.
+
+=head1 HOW IT WORKS
+
+Egypt takes advantage of GCC's capability to dump an intermediate
+representation of the program being compiled into a file (a RTL file);
+this file is much easier to extract information from than a source
+file.  Egypt is a short Perl script that extracts information about
+function calls and functions taking the addresses of other functions,
+and massages it into the format used by Graphviz.
+
+=head1 EXAMPLES
+
+Compile the program or source file you want to create a call graph for
+with gcc, adding the option "-dr" to CFLAGS.  This option causes gcc
+to dump its intermediate code representation of each file it compiles
+into a .rtl file.
+
+For example, the following works for many programs:
+
+   make clean
+   make CFLAGS=-dr
+
+Then run egypt with one or more of the .rtl files produced as command
+line arguments and pipe its output to the "dot" program from the
+Graphviz package.  For example, if you have some .rtl files in your
+current directory and want the call graph in PostScript format in the
+file "callgraph.ps", fitting everything on a US letter size page in
+landscape mode, try
+
+   egypt *.rtl | dot -Grotate=90 -Gsize=8.5,11  -Tps -o callgraph.ps
+
+For a nontrivial program, this may leave the texts too small to
+comfortably read.  Then you can try N-up printing:
+
+   egypt *.rtl | dot -Gpage=8.5,11 -Tps -o callgraph.ps
+
+=head1 WHY IS IT CALLED EGYPT?
+
+Egypt was going to be called "rtlcg", short for RTL Call Graph, but it
+turned out to be one of those rare cases where ROT13'ing the name made
+it easier to pronounce.
+
+=head1 SEE ALSO
+
+L<gcc>, L<dot>
+
+=head1 COPYRIGHT
+
+Copyright 1994-2003 Andreas Gustafsson
+
+This program is free software; you can redistribute it and/or
+modify it under the same terms as Perl itself.
+
+=head1 AUTHOR
+
+Andreas Gustafsson
+
+=cut
+
+use strict;
+use Getopt::Long;
+
+$VERSION = "1.0";
+
+# A data structure containing information about potential function
+# calls.  This is a reference to a hash table where the key is a
+# the name of a function (the caller) and the value is a reference
+# to another hash table indexed by the name of a symbol referenced
+# by the caller (the potential callee) and a value of "direct"
+# (if the reference is a direct function call) or "indirect"
+# (if the reference is a non-function-call symbol reference;
+# if the referenced symbol itself turns out to be a function,
+# this will be considered an indirect function call).
+
+my $calls = { };
+
+# The current function
+my $curfunc;
+
+# Functions to omit
+my @omit = ();
+
+# Mapping from symbol reference types to dot styles
+my $styles = {
+    direct => 'solid',
+    indirect => 'dotted'
+};
+
+GetOptions('omit=s' => \@omit);
+@omit = split(/,/, join(',', @omit));
+
+while (<>) {
+    chop;
+    $curfunc = $1 if /^;; Function (.*)$/;
+    if (/^.*\(call.*"(.*)".*$/) {
+	$calls->{$curfunc}->{$1} = "direct";
+    } elsif (/^.*\(symbol_ref.*"(.*)".*$/) {
+	$calls->{$curfunc}->{$1} = "indirect";
+    }
+}
+
+delete @$calls{@omit};
+
+print "digraph callgraph {\n";
+
+foreach my $caller (keys %{$calls}) {
+    foreach my $callee (keys %{$calls->{$caller}}) {
+	# If the referenced symbol is not a function, ignore it.
+	next unless exists($calls->{$callee});
+	my $reftype = $calls->{$caller}->{$callee};
+	my $style = $styles->{$reftype};
+	print "$caller -> $callee [style=$style];\n";
+    }
+}
+print "\n}\n";
