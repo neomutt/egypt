@@ -87,7 +87,9 @@ Andreas Gustafsson
 use strict;
 use Getopt::Long;
 
-$VERSION = "1.0";
+use vars qw($Version);
+
+$VERSION = "1.1";
 
 # A data structure containing information about potential function
 # calls.  This is a reference to a hash table where the key is a
