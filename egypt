@@ -6,8 +6,8 @@ egypt - create call graph from gcc RTL dump
 
 =head1 SYNOPISIS
 
- egypt [--omit function,function,...] <rtl-file>... | dotty -
- egypt [--omit function,function,...] <rtl-file>... | dot <dot-options>
+ egypt [--omit function,function,...] [--include-external] <rtl-file>... | dotty -
+ egypt [--omit function,function,...] [--include-external] <rtl-file>... | dot <dot-options>
     
 =head1 DESCRIPTION
 
@@ -22,13 +22,24 @@ Egypt is a simple tool for creating call graphs of C programs.
 Omit the given functions from the call graph.  Multiple function names
 may be given separated by commas.
 
+=item include-external
+
+Include calls to external functions in the call graph.  A function is
+considered external if it is not defined in any of the input files.
+For example, functions in the standard C library are external.  By
+default, such calls are not shown.  Even with this option, only direct
+calls will be shown; there is no way to show indirect calls to
+external functions.
+
 =head1 HOW IT WORKS
 
-Egypt neither analyzes source code nor lays out graphs.  Instead, it
-leaves the source code analysis to GCC and the graph layout to
-Graphviz, both of which better at their respective jobs than egypt
-could ever hope to be itself.  Egypt is just a small Perl script that
-acts as glue between these existing tools.
+The two major tasks in creating a call graph are analyzing the syntax
+of the source code to find the function calls and laying out the
+graph, but Egypt actually does neither.  Instead, it delegates the
+source code analysis to GCC and the graph layout to Graphviz, both of
+which are better at their respective jobs than egypt could ever hope
+to be itself.  Egypt itself is just a small Perl script that acts as
+glue between these existing tools.
 
 Egypt takes advantage of GCC's capability to dump an intermediate
 representation of the program being compiled into a file (a I<RTL
@@ -54,9 +65,9 @@ For example, the following works for many programs:
 To view the call graph in an X11 window, run egypt with one or
 more .rtl files as command line arguments and pipe its output to the
 B<dotty> program from the Graphviz package.  For example, if you
-compiled F<foo.c> with C<gcc -dr> to generate F<foo.c.rtl>, use
+compiled F<foo.c> with C<gcc -dr> to generate F<foo.c.00.rtl>, use
 
-    egypt foo.c.rtl | dotty -
+    egypt foo.c.00.rtl | dotty -
 
 =head1 PRINTING THE CALL GRAPH
 
@@ -65,12 +76,12 @@ the B<dot> program from the Graphviz package.  For example, to generate
 a callgraph in the file F<callgraph.ps> fitting everything on a US
 letter size page in landscape mode, try
 
-   egypt foo.c.rtl | dot -Grotate=90 -Gsize=8.5,11 -Tps -o callgraph.ps
+   egypt foo.c.00.rtl | dot -Grotate=90 -Gsize=8.5,11 -Tps -o callgraph.ps
 
 For nontrivial programs, the graph may end up too small
 to comfortably read.  If that happens, try N-up printing:
 
-   egypt foo.c.rtl | dot -Gpage=8.5,11 -Tps -o callgraph.ps
+   egypt foo.c.00.rtl | dot -Gpage=8.5,11 -Tps -o callgraph.ps
 
 You can also try playing with other B<dot> options such as
 B<-Grankdir> and B<-Gratio>, or for a different style of graph, try
@@ -97,7 +108,7 @@ L<gcc>, L<dotty>, L<dot>, L<neato>
 
 =head1 COPYRIGHT
 
-Copyright 1994-2004 Andreas Gustafsson
+Copyright 1994-2006 Andreas Gustafsson
 
 This program is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.
@@ -113,7 +124,7 @@ use Getopt::Long;
 
 use vars qw($VERSION);
 
-$VERSION = "1.4";
+$VERSION = "1.5";
 
 # A data structure containing information about potential function
 # calls.  This is a reference to a hash table where the key is a
@@ -132,6 +143,7 @@ my $curfunc;
 
 # Functions to omit
 my @omit = ();
+my $include_external = 0;
 
 # Mapping from symbol reference types to dot styles
 my $styles = {
@@ -139,7 +151,9 @@ my $styles = {
     indirect => 'dotted'
 };
 
-GetOptions('omit=s' => \@omit);
+GetOptions('omit=s' => \@omit,
+	   'include-external' => \$include_external);
+
 @omit = split(/,/, join(',', @omit));
 
 while (<>) {
@@ -161,9 +175,11 @@ print "digraph callgraph {\n";
 
 foreach my $caller (keys %{$calls}) {
     foreach my $callee (keys %{$calls->{$caller}}) {
-	# If the referenced symbol is not a function, ignore it.
-	next unless exists($calls->{$callee});
 	my $reftype = $calls->{$caller}->{$callee};
+	# If the referenced symbol is not a defined function
+	# or a direct call to an external function, ignore it.
+	next unless exists($calls->{$callee}) or
+	    $include_external and $reftype eq 'direct';
 	my $style = $styles->{$reftype};
 	print "$caller -> $callee [style=$style];\n";
     }
