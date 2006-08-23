@@ -8,7 +8,7 @@ egypt - create call graph from gcc RTL dump
 
  egypt [--omit function,function,...] [--include-external] <rtl-file>... | dotty -
  egypt [--omit function,function,...] [--include-external] <rtl-file>... | dot <dot-options>
-    
+
 =head1 DESCRIPTION
 
 Egypt is a simple tool for creating call graphs of C programs.
@@ -31,6 +31,8 @@ default, such calls are not shown.  Even with this option, only direct
 calls will be shown; there is no way to show indirect calls to
 external functions.
 
+=back
+
 =head1 HOW IT WORKS
 
 The two major tasks in creating a call graph are analyzing the syntax
@@ -43,22 +45,25 @@ glue between these existing tools.
 
 Egypt takes advantage of GCC's capability to dump an intermediate
 representation of the program being compiled into a file (a I<RTL
-file>); this file is much easier to extract information from than a
-C source file.  Egypt extracts information about function calls and
-functions taking the addresses of other functions from the RTL file,
-and massages it into the format used by Graphviz.
+file>); this file is much easier to extract information from than a C
+source file.  Egypt extracts information about function calls from the
+RTL file and massages it into the format used by Graphviz.
 
 =head1 GENERATING THE RTL FILE
 
 Compile the program or source file you want to create a call graph for
 with gcc, adding the option "-dr" to CFLAGS.  This option causes gcc
 to dump its intermediate code representation of each file it compiles
-into a .rtl file.
+into a a file.
 
 For example, the following works for many programs:
 
    make clean
    make CFLAGS=-dr
+
+Depending on the GCC version, the RTL file for a source file F<foo.c>
+may be called something like F<foo.c.rtl>, F<foo.c.00.rtl>, or
+F<foo.c.00.expand>.
 
 =head1 VIEWING THE CALL GRAPH
 
@@ -76,18 +81,23 @@ the B<dot> program from the Graphviz package.  For example, to generate
 a callgraph in the file F<callgraph.ps> fitting everything on a US
 letter size page in landscape mode, try
 
-   egypt foo.c.00.rtl | dot -Grotate=90 -Gsize=8.5,11 -Tps -o callgraph.ps
+   egypt foo.c.00.rtl | dot -Grotate=90 -Gsize=11,8.5 -Tps -o callgraph.ps
+
+Sometimes, the graph will fit better if function calls go from left to
+right instead of top to bottom.  The B<dot> option B<-Grankdir=LR>
+will do that:
+
+   egypt foo.c.00.rtl | dot -Gsize=8.5,11 -Grankdir=LR -Tps -o callgraph.ps
 
 For nontrivial programs, the graph may end up too small
 to comfortably read.  If that happens, try N-up printing:
 
    egypt foo.c.00.rtl | dot -Gpage=8.5,11 -Tps -o callgraph.ps
 
-You can also try playing with other B<dot> options such as
-B<-Grankdir> and B<-Gratio>, or for a different style of graph, try
-using B<neato> instead of B<dot>.  See the Graphwiz documentation for
-more information about the various options available for
-customizing the style of the graph.
+You can also try playing with other B<dot> options such as B<-Gratio>,
+or for a different style of graph, try using B<neato> instead of
+B<dot>.  See the Graphwiz documentation for more information about the
+various options available for customizing the style of the graph.
 
 =head1 READING THE CALL GRAPH
 
@@ -124,7 +134,7 @@ use Getopt::Long;
 
 use vars qw($VERSION);
 
-$VERSION = "1.5";
+$VERSION = "1.6";
 
 # A data structure containing information about potential function
 # calls.  This is a reference to a hash table where the key is a
@@ -137,6 +147,9 @@ $VERSION = "1.5";
 # this will be considered an indirect function call).
 
 my $calls = { };
+
+# A map from mangled C++ names to the corresponding demangled ones
+my $demangle = { };
 
 # The current function
 my $curfunc;
@@ -151,6 +164,11 @@ my $styles = {
     indirect => 'dotted'
 };
 
+sub demangle {
+    my ($name) = @_;
+    return $demangle->{$name} || $name;
+}
+
 GetOptions('omit=s' => \@omit,
 	   'include-external' => \$include_external);
 
@@ -159,7 +177,13 @@ GetOptions('omit=s' => \@omit,
 while (<>) {
     chomp;
     if (/^;; Function (\S+)\s*$/) {
+	# pre-gcc4 style
 	$curfunc = $1;
+	$calls->{$curfunc} = { } if ! exists($calls->{$curfunc});
+    } elsif (/^;; Function (.*)\s+\((\S+)\)$/) {
+	# gcc4 style
+	$curfunc = $2;
+	$demangle->{$curfunc} = $1;
 	$calls->{$curfunc} = { } if ! exists($calls->{$curfunc});
     }
     if (/^.*\(call.*"(.*)".*$/) {
@@ -171,6 +195,9 @@ while (<>) {
 
 delete @$calls{@omit};
 
+my %omit_map;
+@omit_map{@omit} = ();
+
 print "digraph callgraph {\n";
 
 foreach my $caller (keys %{$calls}) {
@@ -179,9 +206,12 @@ foreach my $caller (keys %{$calls}) {
 	# If the referenced symbol is not a defined function
 	# or a direct call to an external function, ignore it.
 	next unless exists($calls->{$callee}) or
-	    $include_external and $reftype eq 'direct';
+	    $include_external and $reftype eq 'direct'
+	        and ! exists $omit_map{$callee};
 	my $style = $styles->{$reftype};
-	print "$caller -> $callee [style=$style];\n";
+	my $caller_d = demangle($caller);
+	my $callee_d = demangle($callee);	
+	print "\"$caller_d\" -> \"$callee_d\" [style=$style];\n";
     }
 }
 print "\n}\n";
