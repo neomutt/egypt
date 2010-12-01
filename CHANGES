@@ -1,0 +1,13 @@
+-- 1.7 released --
+
+Added this file.
+
+Added more text about indirect calls to man page.
+
+Documented the C++ demangling support.
+
+Ignore caret prefix on ARM short calls (from Lennert Buytenhek).
+
+Escape quote characters in demangled C++ names.
+
+-- 1.6 released --
