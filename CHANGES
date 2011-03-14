@@ -1,3 +1,10 @@
+-- 1.8 released --
+
+Deal with CRLF terminated RTL files.
+
+The graph now includes any functions that are defined in the
+compilation unit but do not call nor get called by other functions.
+
 -- 1.7 released --
 
 Added this file.

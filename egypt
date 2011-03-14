@@ -68,6 +68,7 @@ F<foo.c.00.expand>.
 
 =head1 VIEWING THE CALL GRAPH
 
+
 To view the call graph in an X11 window, run egypt with one or
 more RTL files as command line arguments and pipe its output to the
 B<dotty> program from the Graphviz package.  For example, if you
@@ -155,7 +156,7 @@ L<gcc>, L<dotty>, L<dot>, L<neato>
 
 =head1 COPYRIGHT
 
-Copyright 1994-2010 Andreas Gustafsson
+Copyright 1994-2011 Andreas Gustafsson
 
 This program is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.
@@ -171,7 +172,7 @@ use Getopt::Long;
 
 use vars qw($VERSION);
 
-$VERSION = "1.7";
+$VERSION = "1.8";
 
 # A data structure containing information about potential function
 # calls.  This is a reference to a hash table where the key is a
@@ -203,7 +204,10 @@ my $styles = {
 
 sub demangle {
     my ($name) = @_;
-    return $demangle->{$name} || $name;
+    $name = $demangle->{$name} || $name;
+    # Escape embedded quotes
+    $name =~ s/\"/\\\"/g;
+    return $name;
 }
 
 GetOptions('omit=s' => \@omit,
@@ -211,15 +215,20 @@ GetOptions('omit=s' => \@omit,
 
 @omit = split(/,/, join(',', @omit));
 
+sub enter_func {
+    my ($funcname) = @_;
+    $curfunc = $funcname;
+    $calls->{$curfunc} = { } if ! exists($calls->{$curfunc});
+}
+
 while (<>) {
     chomp;
     if (/^;; Function (\S+)\s*$/) {
 	# pre-gcc4 style
-	$curfunc = $1;
-	$calls->{$curfunc} = { } if ! exists($calls->{$curfunc});
-    } elsif (/^;; Function (.*)\s+\((\S+)\)$/) {
+	enter_func($1);
+    } elsif (/^;; Function (.*)\s+\((\S+)\)\s*$/) {
 	# gcc4 style
-	$curfunc = $2;
+	enter_func($2);
 	$demangle->{$curfunc} = $1;
 	$calls->{$curfunc} = { } if ! exists($calls->{$curfunc});
     }
@@ -235,9 +244,12 @@ delete @$calls{@omit};
 my %omit_map;
 @omit_map{@omit} = ();
 
+my %unconnected = map { ($_, undef) } keys %{$calls};
+
 print "digraph callgraph {\n";
 
 foreach my $caller (keys %{$calls}) {
+    my $caller_d = demangle($caller);
     foreach my $callee (keys %{$calls->{$caller}}) {
 	my $reftype = $calls->{$caller}->{$callee};
 	# ARM short calls are flagged with a caret prefix; ignore it
@@ -248,12 +260,16 @@ foreach my $caller (keys %{$calls}) {
 	    $include_external and $reftype eq 'call'
 	        and ! exists $omit_map{$callee};
 	my $style = $styles->{$reftype};
-	my $caller_d = demangle($caller);
 	my $callee_d = demangle($callee);
-	# Escape embedded quotes
-	$caller_d =~ s/\"/\\\"/g;
-	$callee_d =~ s/\"/\\\"/g;
 	print "\"$caller_d\" -> \"$callee_d\" [style=$style];\n";
+	delete $unconnected{$caller};
+	delete $unconnected{$callee};
     }
 }
+
+foreach my $f (keys %unconnected) {
+    my $f_d = demangle($f);
+    print "\"$f_d\";\n";
+}
+
 print "}\n";
