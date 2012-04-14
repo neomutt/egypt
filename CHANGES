@@ -1,3 +1,8 @@
+-- 1.10 released --
+
+Support the RTL function comment syntax of gcc 4.4.0
+when compiling for ARM.
+
 -- 1.9 released --
 
 Support the new RTL function comment syntax of gcc 4.7.

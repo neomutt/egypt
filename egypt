@@ -172,7 +172,7 @@ use Getopt::Long;
 
 use vars qw($VERSION);
 
-$VERSION = "1.9";
+$VERSION = "1.10";
 
 # A data structure containing information about potential function
 # calls.  This is a reference to a hash table where the key is a
@@ -226,8 +226,9 @@ while (<>) {
     if (/^;; Function (\S+)\s*$/) {
 	# pre-gcc4 style
 	enter_func($1);
-    } elsif (/^;; Function (.*)\s+\((\S+)(,.*)?\)\s*$/) {
+    } elsif (/^;; Function (.*)\s+\((\S+)(,.*)?\).*$/) {
 	# gcc4 style
+	# Compiling for ARM, it can look like ";; Function foo (foo)[0:3]"	
 	enter_func($2);
 	$demangle->{$curfunc} = $1;
 	$calls->{$curfunc} = { } if ! exists($calls->{$curfunc});
