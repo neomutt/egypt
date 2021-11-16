@@ -223,9 +223,9 @@ sub demangle {
 }
 
 GetOptions('omit=s' => \@omit,
-	   'only=s' => \@only,
-	   'include-external' => \$include_external,
-	   'files' => sub { $files = {} });
+    'only=s' => \@only,
+    'include-external' => \$include_external,
+    'files' => sub { $files = {} });
 
 @omit = split(/,/, join(',', @omit));
 @only = split(/,/, join(',', @only));
@@ -241,19 +241,19 @@ while (<>) {
     my $file = $1 || '(unknown)';
     chomp;
     if (/^;; Function (\S+)\s*$/) {
-	# pre-gcc4 style
-	enter_func($1);
+        # pre-gcc4 style
+        enter_func($1);
     } elsif (/^;; Function (.*)\s+\((\S+)(,.*)?\).*$/) {
-	# gcc4 style
-	# Compiling for ARM, it can look like ";; Function foo (foo)[0:3]"	
-	enter_func($2);
-	$demangle->{$curfunc} = $1;
-	$calls->{$curfunc} = { } if ! exists($calls->{$curfunc});
+        # gcc4 style
+        # Compiling for ARM, it can look like ";; Function foo (foo)[0:3]"    
+        enter_func($2);
+        $demangle->{$curfunc} = $1;
+        $calls->{$curfunc} = { } if ! exists($calls->{$curfunc});
     }
     if (/^.*\(call.*"(.*)".*$/) {
-	$calls->{$curfunc}->{$1} = 'call';
+        $calls->{$curfunc}->{$1} = 'call';
     } elsif (/^.*\(symbol_ref.*"(.*)".*$/) {
-	$calls->{$curfunc}->{$1} = 'ref';
+        $calls->{$curfunc}->{$1} = 'ref';
     }
     if ($files and $curfunc) {
         $files->{$file} ||= {};
@@ -276,33 +276,33 @@ print "digraph callgraph {\n";
 
 my $sc = 0;
 foreach my $file (keys %$files) {
-	print "subgraph cluster_$sc {\n";
-	print "label = \"$file\";\n";
-	foreach my $func (keys %{$files->{$file}}) {
-		my $func_d = demangle($func);
-		print "\"$func_d\";\n";
-	}
-	print "}\n";
-	$sc++;
+    print "subgraph cluster_$sc {\n";
+    print "label = \"$file\";\n";
+    foreach my $func (keys %{$files->{$file}}) {
+        my $func_d = demangle($func);
+        print "\"$func_d\";\n";
+    }
+    print "}\n";
+    $sc++;
 }
 
 foreach my $caller (keys %{$calls}) {
     my $caller_d = demangle($caller);
     foreach my $callee (keys %{$calls->{$caller}}) {
-	my $reftype = $calls->{$caller}->{$callee};
-	# ARM short calls are flagged with a caret prefix; ignore it
-	$callee =~ s/^\^+//;
-	# If the referenced symbol is not a defined function
-	# or a direct call to an external function, ignore it.
-	next unless exists($calls->{$callee}) or
-	    $include_external and $reftype eq 'call'
-	        and ! exists $omit_map{$callee}
-	        and ! (@only and not exists $only_map{$callee});
-	my $style = $styles->{$reftype};
-	my $callee_d = demangle($callee);
-	print "\"$caller_d\" -> \"$callee_d\" [style=$style];\n";
-	delete $unconnected{$caller};
-	delete $unconnected{$callee};
+        my $reftype = $calls->{$caller}->{$callee};
+        # ARM short calls are flagged with a caret prefix; ignore it
+        $callee =~ s/^\^+//;
+        # If the referenced symbol is not a defined function
+        # or a direct call to an external function, ignore it.
+        next unless exists($calls->{$callee}) or
+            $include_external and $reftype eq 'call'
+                and ! exists $omit_map{$callee}
+                and ! (@only and not exists $only_map{$callee});
+        my $style = $styles->{$reftype};
+        my $callee_d = demangle($callee);
+        print "\"$caller_d\" -> \"$callee_d\" [style=$style];\n";
+        delete $unconnected{$caller};
+        delete $unconnected{$callee};
     }
 }
 
