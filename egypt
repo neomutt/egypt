@@ -194,41 +194,9 @@ $VERSION = "1.10";
 # this will be considered an indirect function call).
 
 my $calls = { };
-my $files;
-
-# A map from mangled C++ names to the corresponding demangled ones
-my $demangle = { };
 
 # The current function
 my $curfunc;
-
-# Functions to omit
-my @omit = ();
-# Limit to given functions only
-my @only = ();
-my $include_external = 0;
-
-# Mapping from symbol reference types to dot styles
-my $styles = {
-    call => 'solid',
-    ref => 'dotted'
-};
-
-sub demangle {
-    my ($name) = @_;
-    $name = $demangle->{$name} || $name;
-    # Escape embedded quotes
-    $name =~ s/\"/\\\"/g;
-    return $name;
-}
-
-GetOptions('omit=s' => \@omit,
-    'only=s' => \@only,
-    'include-external' => \$include_external,
-    'files' => sub { $files = {} });
-
-@omit = split(/,/, join(',', @omit));
-@only = split(/,/, join(',', @only));
 
 sub enter_func {
     my ($funcname) = @_;
@@ -237,17 +205,9 @@ sub enter_func {
 }
 
 while (<>) {
-    $ARGV =~ /([^\/]+\.[^\d]+)\.[^\.]+$/ or $ARGV =~ /([^\/]+)\.\d+r?\.[^\.]+$/;
-    my $file = $1 || '(unknown)';
     chomp;
-    if (/^;; Function (\S+)\s*$/) {
-        # pre-gcc4 style
-        enter_func($1);
-    } elsif (/^;; Function (.*)\s+\((\S+)(,.*)?\).*$/) {
-        # gcc4 style
-        # Compiling for ARM, it can look like ";; Function foo (foo)[0:3]"    
+    if (/^;; Function (.*)\s+\((\S+)(,.*)?\).*$/) {
         enter_func($2);
-        $demangle->{$curfunc} = $1;
         $calls->{$curfunc} = { } if ! exists($calls->{$curfunc});
     }
     if (/^.*\(call.*"(.*)".*$/) {
@@ -255,60 +215,51 @@ while (<>) {
     } elsif (/^.*\(symbol_ref.*"(.*)".*$/) {
         $calls->{$curfunc}->{$1} = 'ref';
     }
-    if ($files and $curfunc) {
-        $files->{$file} ||= {};
-        $files->{$file}{$curfunc} = $calls->{$curfunc};
-    }
 }
-
-my %omit_map;
-@omit_map{@omit} = ();
-
-my %only_map;
-@only_map{@only} = ();
-
-delete @$calls{@omit};
-%$calls = map { exists $only_map{$_} ? ($_ => $calls->{$_}) : () } keys %$calls if @only;
 
 my %unconnected = map { ($_, undef) } keys %{$calls};
 
 print "digraph callgraph {\n";
 
-my $sc = 0;
-foreach my $file (keys %$files) {
-    print "subgraph cluster_$sc {\n";
-    print "label = \"$file\";\n";
-    foreach my $func (keys %{$files->{$file}}) {
-        my $func_d = demangle($func);
-        print "\"$func_d\";\n";
-    }
-    print "}\n";
-    $sc++;
-}
+print "\tgraph [\n";
+print "\t\trankdir=\"LR\"\n";
+print "\t\tnodesep=\"0.2\"\n";
+print "\t\tranksep=\"0.5\"\n";
+print "\t\tcompound=\"true\"\n";
+print "\t]\n";
+print "\n";
+print "\tnode [\n";
+print "\t\tshape=\"Mrecord\"\n";
+print "\t\tfontsize=\"12\"\n";
+print "\t\tfillcolor=\"#ffffff\"\n";
+print "\t\tstyle=\"filled\"\n";
+print "\t\theight=\"0.2\"\n";
+print "\t\tpenwidth=\"1.5\"\n";
+print "\t\tcolor=\"black\"\n";
+print "\t]\n";
+print "\n";
+print "\tedge [\n";
+print "\t\tpenwidth=\"1.0\"\n";
+print "\t\tarrowsize=\"0.5\"\n";
+print "\t]\n";
+print "\n";
 
 foreach my $caller (keys %{$calls}) {
-    my $caller_d = demangle($caller);
     foreach my $callee (keys %{$calls->{$caller}}) {
         my $reftype = $calls->{$caller}->{$callee};
-        # ARM short calls are flagged with a caret prefix; ignore it
-        $callee =~ s/^\^+//;
         # If the referenced symbol is not a defined function
         # or a direct call to an external function, ignore it.
-        next unless exists($calls->{$callee}) or
-            $include_external and $reftype eq 'call'
-                and ! exists $omit_map{$callee}
-                and ! (@only and not exists $only_map{$callee});
-        my $style = $styles->{$reftype};
-        my $callee_d = demangle($callee);
-        print "\"$caller_d\" -> \"$callee_d\" [style=$style];\n";
+        next unless exists($calls->{$callee});
+        print "\t$caller -> $callee\n";
         delete $unconnected{$caller};
         delete $unconnected{$callee};
     }
 }
 
+print "\n";
 foreach my $f (keys %unconnected) {
-    my $f_d = demangle($f);
-    print "\"$f_d\";\n";
+    print "\t$f\n";
 }
 
+print "\n";
 print "}\n";
