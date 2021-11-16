@@ -303,7 +303,7 @@ sub dot_string {
     # Escape embedded quotes
     $s =~ s/\"/\\\"/g;
     # Surround with qotes
-    return "\"$s\"";
+    return "$s";
 }
 
 GetOptions('omit=s' => \@omit,
@@ -568,6 +568,29 @@ sub show_call_p {
 
 print "digraph callgraph {\n";
 
+print "\tgraph [\n";
+print "\t\trankdir=\"LR\"\n";
+print "\t\tnodesep=\"0.2\"\n";
+print "\t\tranksep=\"0.5\"\n";
+print "\t\tcompound=\"true\"\n";
+print "\t]\n";
+print "\n";
+print "\tnode [\n";
+print "\t\tshape=\"Mrecord\"\n";
+print "\t\tfontsize=\"12\"\n";
+print "\t\tfillcolor=\"#ffffff\"\n";
+print "\t\tstyle=\"filled\"\n";
+print "\t\theight=\"0.2\"\n";
+print "\t\tpenwidth=\"1.5\"\n";
+print "\t\tcolor=\"black\"\n";
+print "\t]\n";
+print "\n";
+print "\tedge [\n";
+print "\t\tpenwidth=\"1.0\"\n";
+print "\t\tarrowsize=\"0.5\"\n";
+print "\t]\n";
+print "\n";
+
 # Nodes
 
 foreach my $f (sort keys %$funcs) {
@@ -588,7 +611,7 @@ foreach my $f (sort keys %$funcs) {
         "$_=$val"
     } sort keys %$a);
     my $f_s = dot_string($f);
-    print "$f_s [$attrs_str];\n";
+    # print "\t$f_s\n";
 }
 
 # Edges
@@ -597,10 +620,11 @@ foreach my $caller (sort keys %{$funcs}) {
     foreach my $callee (sort keys %{$funcs->{$caller}->{'calls'}}) {
         my $reftype = $funcs->{$caller}->{'calls'}->{$callee};
         next unless show_call_p($reftype, $callee);
+	next if $caller eq $callee;
         my $style = $styles->{$reftype};
         my $caller_s = dot_string($caller);
         my $callee_s = dot_string($callee);
-        print "$caller_s -> $callee_s [style=$style];\n";
+        print "\t$caller_s -> $callee_s\n";
     }
 }
 
@@ -626,4 +650,5 @@ if ($cluster_by_file) {
     }
 }
 
+print "\n";
 print "}\n";
