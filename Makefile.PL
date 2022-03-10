@@ -1,6 +1,8 @@
 use strict;
 use ExtUtils::MakeMaker;
 WriteMakefile(NAME => 'egypt',
-	      VERSION_FROM => 'egypt',
-	      EXE_FILES => [ 'egypt' ]
-	     );
+              AUTHOR => 'Andreas Gustafsson',
+              VERSION_FROM => 'egypt',
+              ABSTRACT => 'A tool for creating call graphs of C programs',
+              EXE_FILES => [ 'egypt' ]
+             );

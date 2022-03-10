@@ -1,3 +1,18 @@
+
+-- 1.11 released --
+
+Miscellaneous bug fixes.
+
+New command line option --cluster-by-file.
+
+New command line options --callees and --callers.
+
+Support omitting external functions using the --omit option.
+
+Support new RTL dump function comment syntax of gcc versions 7 and 10.
+
+New command line option --summarize-callers.
+
 -- 1.10 released --
 
 Support the RTL function comment syntax of gcc 4.4.0
