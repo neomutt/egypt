@@ -51,7 +51,7 @@ dot -Tpng compose.gv > compose.png
 
 The graphviz file is in text format and can get quite verbose.
 Especially with the frequent use of library functions.
-You may wish to filter out `mutt_buffer_string()`.
+You may wish to filter out `buf_string()`.
 
 ## Sample Output
 
